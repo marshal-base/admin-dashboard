@@ -1,64 +1,58 @@
-<div align="center"><strong>Next.js 15 Admin Dashboard Template</strong></div>
-<div align="center">Built with the Next.js App Router</div>
-<br />
-<div align="center">
-<a href="https://next-admin-dash.vercel.app/">Demo</a>
-<span> · </span>
-<a href="https://vercel.com/templates/next.js/admin-dashboard-tailwind-postgres-react-nextjs">Clone & Deploy</a>
-<span>
-</div>
+# 追加首付计算器
 
-## Overview
+该项目通过计算实际还款过程, 帮助决策在给定条件下是否需要追加首付, 需要追加多少首付
 
-This is a starter template using the following stack:
+在线测算: http://www.yaozeyuan.online/additional_down_payment_calculator/
 
-- Framework - [Next.js (App Router)](https://nextjs.org)
-- Language - [TypeScript](https://www.typescriptlang.org)
-- Auth - [Auth.js](https://authjs.dev)
-- Database - [Postgres](https://vercel.com/postgres)
-- Deployment - [Vercel](https://vercel.com/docs/concepts/next.js/overview)
-- Styling - [Tailwind CSS](https://tailwindcss.com)
-- Components - [Shadcn UI](https://ui.shadcn.com/)
-- Analytics - [Vercel Analytics](https://vercel.com/analytics)
-- Formatting - [Prettier](https://prettier.io)
+计算方案解释:
 
-This template uses the new Next.js App Router. This includes support for enhanced layouts, colocation of components, tests, and styles, component-level data fetching, and more.
+就实际情况而言, 是否补交首付, 补交多少首付是非常复杂的问题, 涉及到至少十年跨度, 8 个变量, 以及复杂的家庭决策背景因素. 因此**不存在简单的确定性回答**
 
-## Getting Started
+这个问题涉及到的抽象描述如下:
 
-During the deployment, Vercel will prompt you to create a new Postgres database. This will add the necessary environment variables to your project.
+假设交完首付后, 我们剩余 a 万元现金, 背负 b 万元存款, 利率为 c, 还款 d 年, 每月还款 e 元(等额本息)或 f 元(等额本金), 期间每月收入 g 万元, 买房剩余现金+缴纳月供后剩余现金每年年底全部拿去买理财, 理财年年华收益率 h,
 
-Inside the Vercel Postgres dashboard, create a table based on the schema defined in this repository.
+需要考虑的问题为: 是否要补交 i 元首付, 以降低每月 j 元月供, 从而每月增加 k 元储蓄, 以求在还款完成后, 我们剩余总资金 l 最大.
 
-```
-CREATE TYPE status AS ENUM ('active', 'inactive', 'archived');
+这里使用数学公式计算并不直观, 各个变量间也会互相影响, 所以我们选择暴力计算的方式, 根据设定参数计算实际还款过程和最终结果, 从而建立`f(初始参数) => 家庭最终总财富`的对应关系, 方便大家根据实际情况进行测算
 
-CREATE TABLE products (
-  id SERIAL PRIMARY KEY,
-  image_url TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status status NOT NULL,
-  price NUMERIC(10, 2) NOT NULL,
-  stock INTEGER NOT NULL,
-  available_at TIMESTAMP NOT NULL
-);
-```
+为计算方便, 在接下来的计算中, 我们假定
 
-Then, uncomment `app/api/seed.ts` and hit `http://localhost:3000/api/seed` to seed the database with products.
+- 实际贷款发生额 = 总贷款数 - 预计补交首付数
+  - 预计补交首付数小于当前存款数, 小于总贷款数
+  - 补交的首付优先补交商贷(利率高), 然后再补交公积金
+  - 不补交首付的现金存款用于购买当年的理财
+- 贷款每月泵缴
+  - **每月收入必须大于贷款首月还款额**
+  - 每月收入减去还款额后, 剩余资金并不购买理财, 而是到年底统一购买理财, 方便计算总金额
+- 理财每年结算一次
+  - 只买一年期的理财
+  - 当年年底剩余现金全额计入下一年的理财起始资金中(复利模式)
+- 不考虑通货膨胀
+  - 通货膨胀后只影响货币"值钱度", 但不影响待还款金额, 因此可以忽略该因素
+- 理财收益率/贷款利率/月收入固定, 不会提前还款
+  - 方便计算
 
-Next, copy the `.env.example` file to `.env` and update the values. Follow the instructions in the `.env.example` file to set up your GitHub OAuth application.
+**注意:**
 
-```bash
-npm i -g vercel
-vercel link
-vercel env pull
-```
+在实际应用中, 除了最终收益率, 至少还需要考虑以下因素
 
-Finally, run the following commands to start the development server:
+1.  **投资收益率并不稳定**, 个别年份可能为负(炒股), 甚至全亏(中行原油宝, 亏成负数), 即使是国债利率也可能变成负值(德国/日本)
+2.  长时间范围内家庭对大额现金的需求几乎是确定事件(结婚/生子/疾病/教育/...)
+3.  长时间范围内收入变动几乎是确定事件(行业整治/经济危机/科技革命/...)
 
-```
-pnpm install
-pnpm dev
-```
+因此, 该模型仅为理论运算结果, 仅供参考, 不构成任何房贷方案设计推荐
 
-You should now be able to access the application at http://localhost:3000.
+# 涉及变量解释
+
+| 变量列表           | 说明                                                                                                             |
+| :----------------- | :--------------------------------------------------------------------------------------------------------------- |
+| 月收入             | 单位:万元, 每月现金收入                                                                                          |
+| 预计追加的首付金额 | 单位:万元, 首付=基础首付+额外补交的首付, 基础首付是必填项, 不需要考虑.只有额外补交的部分才需要考虑补交多少更合适 |
+| 预期每年投资收益率 | 百分数, 5.2%则填 5.2                                                                                             |
+| 商贷利率           | 百分数, 5.2%则填 5.2                                                                                             |
+| 商贷贷款年份       | 单位:年                                                                                                          |
+| 商贷贷款金额       | 单位:万元                                                                                                        |
+| 公积金贷款利率     | 百分数, 3.5%则填 3.5                                                                                             |
+| 公积金贷款年份     | 单位:年                                                                                                          |
+| 公积金贷款金额     | 单位:万元                                                                                                        |
